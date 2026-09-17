@@ -1,0 +1,87 @@
+/**
+ * Jewel Fashion POS - Database Schema & Initial Config
+ * (Clean Database - Sample & Mock Data Cleared)
+ */
+
+const INITIAL_PRODUCTS = [];
+const INITIAL_CUSTOMERS = [];
+const INITIAL_RENTALS = [];
+const INITIAL_SALES = [];
+const INITIAL_SMS_LOGS = [];
+
+const INITIAL_SETTINGS = {
+  shopName: "JEWEL FASHION",
+  tagline: "Fine Gold, Diamond & Luxury Bridal Rental House",
+  address: "No. 142, Galle Road, Colombo 03, Sri Lanka",
+  phone: "+94 11 234 5678 / +94 77 123 4567",
+  ownerPhone: "+94 77 999 8888",
+  ownerEmail: "owner@jewelfashion.lk",
+  currency: "LKR",
+  currencySymbol: "Rs.",
+  lateFeePerDay: 1500,
+  taxRatePercent: 0,
+  defaultRentalDays: 3,
+  smsGateway: "SMSLENZ",
+  smsUserId: "2110",
+  smsApiKey: "44b6b7fc-998c-4d14-8a8c-2bd52fe251f2",
+  smsSenderId: "J FASHION",
+  autoSmsOnRental: true,
+  autoSmsOnReturn: true,
+  autoSmsOnSale: true,
+  autoSmsToOwner: false,
+  autoSmsReminders: false,
+  cloudinaryCloudName: "yypmru3x",
+  cloudinaryUploadPreset: "jewelfashion"
+};
+
+const INITIAL_USERS = [
+  {
+    id: "USER-1",
+    name: "System Administrator",
+    username: "admin",
+    password: "123",
+    role: "ADMIN",
+    station: "Executive Head Office",
+    phone: "0771234567",
+    email: "admin@jewelfashion.lk",
+    joinedDate: "2026-01-10",
+    avatar: "https://ui-avatars.com/api/?name=Admin+User&background=0f172a&color=fde047&bold=true"
+  }
+];
+
+const INITIAL_CATEGORIES = [
+  { id: "CAT-001", name: "Necklaces", icon: "fa-gem", description: "Necklaces, Chokers & Chains" },
+  { id: "CAT-002", name: "Bridal Sets", icon: "fa-crown", description: "Bridal Sets (Complete Suites)" },
+  { id: "CAT-003", name: "Rings", icon: "fa-ring", description: "Solitaire, Diamond & Gold Rings" },
+  { id: "CAT-004", name: "Bangles", icon: "fa-circle-notch", description: "Bangles, Bracelets & Kadas" },
+  { id: "CAT-005", name: "Earrings", icon: "fa-feather", description: "Jhumkas, Drops & Chandeliers" },
+  { id: "CAT-006", name: "Tiaras & Crowns", icon: "fa-chess-queen", description: "Tiaras & Bridal Crowns" },
+  { id: "CAT-007", name: "Pendants", icon: "fa-shield-halved", description: "Pendants & Lockets" },
+  { id: "CAT-008", name: "Anklets", icon: "fa-spa", description: "Payals & Bridal Anklets" }
+];
+
+window.getJewelryPlaceholderSvg = function() {
+  return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'><rect width='400' height='400' fill='%2309090b'/><circle cx='200' cy='180' r='70' fill='%2318181b' stroke='%2327272a' stroke-width='2'/><path d='M200 135 L235 170 L220 215 L180 215 L165 170 Z' fill='none' stroke='%23fbbf24' stroke-width='5' stroke-linejoin='round'/><text x='200' y='285' fill='%23fde047' font-family='sans-serif' font-size='13' font-weight='bold' text-anchor='middle' letter-spacing='2'>JEWEL FASHION</text></svg>";
+};
+
+window.getOptimizedImageUrl = function(url, width = 400) {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return window.getJewelryPlaceholderSvg();
+  }
+  return url.trim();
+};
+
+window.getLocalDateString = function(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+window.calculateDueDate = function(startDateStr, days) {
+  if (!startDateStr) startDateStr = window.getLocalDateString();
+  const parts = startDateStr.split('-').map(Number);
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  d.setDate(d.getDate() + parseInt(days || 3));
+  return window.getLocalDateString(d);
+};
