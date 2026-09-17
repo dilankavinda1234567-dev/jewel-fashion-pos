@@ -1,0 +1,42 @@
+name: 24/7 Cloud Automated SMS & Owner Report Dispatcher
+
+on:
+  schedule:
+    # Runs hourly 24/7 on Google Cloud to automatically process reminders at any time
+    - cron: '0 * * * *'
+  # Allows 1-click manual trigger from GitHub Actions tab anytime
+  workflow_dispatch:
+    inputs:
+      job_slot:
+        description: 'Select Job Slot to Execute'
+        required: true
+        default: 'ALL_IN_ONE'
+        type: choice
+        options:
+          - ALL_IN_ONE
+          - TODAY_8AM
+          - OVERDUE_1030AM
+          - TOMORROW_5PM
+
+jobs:
+  dispatch-sms:
+    name: Execute Cloud Automated SMS Schedule
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 🚀 Run Automated SMS & Report Dispatcher
+        env:
+          FIREBASE_PROJECT_ID: 'jewel-58bcc'
+          SMSLENZ_USER_ID: '2110'
+          SMSLENZ_API_KEY: '44b6b7fc-998c-4d14-8a8c-2bd52fe251f2'
+          SMSLENZ_SENDER_ID: 'J FASHION'
+          JOB_SLOT: ${{ github.event.inputs.job_slot || 'ALL_IN_ONE' }}
+        run: node scripts/cloud-reminder-cron.js
