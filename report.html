@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#09090b">
+  <title>Jewel Fashion - Executive Rental Dispatch & Return Report</title>
+  
+  <!-- Tailwind CSS (Local & CDN Fallback) -->
+  <script src="assets/js/tailwind.min.js"></script>
+  <script>
+    if (typeof tailwind === 'undefined') {
+      document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+    }
+  </script>
+  <!-- FontAwesome Icons (Local & CDN Fallback) -->
+  <link rel="stylesheet" href="assets/css/fontawesome.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- High-Performance Resource Hints & CDN Preconnect -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com">
+  <link rel="preconnect" href="https://res.cloudinary.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            serif: ['Cinzel', 'serif'],
+            mono: ['Space Mono', 'monospace']
+          },
+          colors: {
+            gold: { 300: '#FDE047', 400: '#FACC15', 500: '#EAB308', 600: '#CA8A04' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html {
+      touch-action: pan-y !important;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      overscroll-behavior-y: none;
+      overscroll-behavior-x: none !important;
+      overflow-x: hidden !important;
+      width: 100% !important;
+      max-width: 100vw !important;
+    }
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      touch-action: pan-y !important;
+      overscroll-behavior-x: none !important;
+      overflow-x: hidden !important;
+      width: 100% !important;
+      max-width: 100vw !important;
+      position: relative !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    @media screen and (max-width: 768px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
+    }
+    .gold-gradient {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FEF08A 50%, #F59E0B 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .glass-card {
+      background: rgba(24, 24, 27, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(63, 63, 70, 0.5);
+    }
+    .badge-today { background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.4); }
+    .badge-tomorrow { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .badge-overdue { background: rgba(244, 63, 94, 0.15); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.4); }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-zinc-950/90 border-b border-zinc-800 backdrop-blur-xl px-4 py-3.5">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black font-black text-lg shadow-lg">
+          <i class="fa-solid fa-gem"></i>
+        </div>
+        <div>
+          <h1 class="font-serif font-bold text-sm tracking-wider gold-gradient">JEWEL FASHION</h1>
+          <p class="text-[10px] text-zinc-400 font-mono tracking-tight uppercase">Executive Rental Dispatch Report</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="window.print()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-700 flex items-center gap-1.5 transition-colors">
+          <i class="fa-solid fa-print"></i> Print
+        </button>
+        <button onclick="location.reload()" class="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-xl border border-zinc-700 transition-colors">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-4xl mx-auto px-4 pt-4">
+
+    <!-- Report Filter Tabs -->
+    <div class="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-2xl border border-zinc-800 mb-4 overflow-x-auto">
+      <button id="tab-today" onclick="switchReportTab('today')" class="flex-1 py-2 px-3 rounded-xl text-xs font-bold text-center transition-all whitespace-nowrap bg-amber-500 text-black shadow-md">
+        <i class="fa-solid fa-bell mr-1"></i> Due Today (8:00 AM)
+      </button>
+      <button id="tab-overdue" onclick="switchReportTab('overdue')" class="flex-1 py-2 px-3 rounded-xl text-xs font-bold text-center text-zinc-400 hover:text-white transition-all whitespace-nowrap">
+        <i class="fa-solid fa-triangle-exclamation mr-1"></i> Overdue (10:30 AM)
+      </button>
+      <button id="tab-tomorrow" onclick="switchReportTab('tomorrow')" class="flex-1 py-2 px-3 rounded-xl text-xs font-bold text-center text-zinc-400 hover:text-white transition-all whitespace-nowrap">
+        <i class="fa-solid fa-clock mr-1"></i> Due Tomorrow (5:00 PM)
+      </button>
+    </div>
+
+    <!-- Overview Banner -->
+    <div class="glass-card rounded-3xl p-4 sm:p-5 mb-4 border border-zinc-800">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span id="report-type-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider badge-today">
+              TODAY'S RETURNS
+            </span>
+            <span id="report-date-str" class="text-xs text-zinc-400 font-mono"></span>
+          </div>
+          <h2 id="report-title" class="text-lg sm:text-xl font-bold text-white">Products Due for Return Today</h2>
+          <p id="report-subtitle" class="text-xs text-zinc-400 mt-0.5">Please inspect items in protective cases and verify ID/Cash deposits upon return.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <div class="px-3.5 py-2 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+            <div class="text-[10px] text-zinc-500 uppercase font-bold">Total Bookings</div>
+            <div id="stat-bookings-count" class="text-lg font-black font-mono text-white">0</div>
+          </div>
+          <div class="px-3.5 py-2 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+            <div class="text-[10px] text-zinc-500 uppercase font-bold">Total Items</div>
+            <div id="stat-items-count" class="text-lg font-black font-mono text-amber-400">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rentals List Container -->
+    <div id="rentals-container" class="space-y-3">
+      <!-- Loading State -->
+      <div class="text-center py-16 text-zinc-500">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3 text-amber-400"></i>
+        <p class="text-xs font-mono">Connecting to Cloud Database...</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Firebase Compat Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB8In8QVbfc-P4NYQmpJXZ7UmVsIvcaGtQ",
+      authDomain: "jewel-58bcc.firebaseapp.com",
+      projectId: "jewel-58bcc",
+      storageBucket: "jewel-58bcc.firebasestorage.app",
+      messagingSenderId: "936290725765",
+      appId: "1:936290725765:web:6adfeb7d30eece3e639eec"
+    };
+
+    let app, db;
+    try {
+      app = firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    } catch (e) {
+      console.error(e);
+    }
+
+    let allRentals = [];
+    let allCustomers = {};
+    let currentTab = 'today';
+
+    // Parse URL parameter ?type=today | ?type=overdue | ?type=tomorrow
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialType = (urlParams.get('type') || 'today').toLowerCase();
+    if (['today', 'overdue', 'tomorrow'].includes(initialType)) {
+      currentTab = initialType;
+    }
+
+    async function loadData() {
+      try {
+        // Fetch Customers
+        const custSnap = await db.collection('customers').get();
+        custSnap.forEach(doc => {
+          allCustomers[doc.id] = doc.data();
+        });
+
+        // Fetch Rentals
+        const rentSnap = await db.collection('rentals').get();
+        allRentals = [];
+        rentSnap.forEach(doc => {
+          const data = doc.data();
+          data._id = doc.id;
+          allRentals.push(data);
+        });
+
+        renderReport();
+      } catch (err) {
+        console.error("Error loading data from Firestore:", err);
+        document.getElementById('rentals-container').innerHTML = `
+          <div class="glass-card p-8 rounded-3xl text-center text-rose-400">
+            <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+            <p class="text-sm font-bold">Failed to load report from cloud database.</p>
+            <p class="text-xs text-zinc-400 mt-1">${err.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    function switchReportTab(tabKey) {
+      currentTab = tabKey;
+      
+      // Update Tab Styles
+      ['today', 'overdue', 'tomorrow'].forEach(k => {
+        const btn = document.getElementById('tab-' + k);
+        if (k === tabKey) {
+          btn.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold text-center transition-all whitespace-nowrap bg-amber-500 text-black shadow-md';
+        } else {
+          btn.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold text-center text-zinc-400 hover:text-white transition-all whitespace-nowrap';
+        }
+      });
+
+      renderReport();
+    }
+
+    function renderReport() {
+      const container = document.getElementById('rentals-container');
+      if (!container) return;
+
+      const now = new Date();
+      const getLocalDate = (d = new Date()) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+      const todayStr = getLocalDate(now);
+      const tomorrowDate = new Date(now);
+      tomorrowDate.setDate(now.getDate() + 1);
+      const tomorrowStr = getLocalDate(tomorrowDate);
+
+      let filtered = [];
+      let badgeHtml = '';
+      let titleText = '';
+      let subtitleText = '';
+
+      if (currentTab === 'today') {
+        filtered = allRentals.filter(r => r.status !== 'RETURNED' && r.dueDate === todayStr);
+        badgeHtml = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider badge-today">🚨 DUE TODAY (8:00 AM)</span>`;
+        titleText = `Today's Return Dispatch (${todayStr})`;
+        subtitleText = `All items scheduled to be handed back to the boutique before 6:30 PM today.`;
+      } else if (currentTab === 'overdue') {
+        filtered = allRentals.filter(r => r.status !== 'RETURNED' && r.dueDate < todayStr);
+        badgeHtml = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider badge-overdue">⚠️ OVERDUE ALERTS (10:30 AM)</span>`;
+        titleText = `Critical Overdue Rentals Report`;
+        subtitleText = `Rentals that exceeded due date with accumulated late fee penalties.`;
+      } else if (currentTab === 'tomorrow') {
+        filtered = allRentals.filter(r => r.status !== 'RETURNED' && r.dueDate === tomorrowStr);
+        badgeHtml = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider badge-tomorrow">⏳ DUE TOMORROW (5:00 PM)</span>`;
+        titleText = `Tomorrow's Return Notice (${tomorrowStr})`;
+        subtitleText = `Items scheduled for return tomorrow. 1-day advance reminder sent to clients.`;
+      }
+
+      document.getElementById('report-type-badge').outerHTML = `<span id="report-type-badge">${badgeHtml}</span>`;
+      document.getElementById('report-date-str').textContent = `Report generated at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      document.getElementById('report-title').textContent = titleText;
+      document.getElementById('report-subtitle').textContent = subtitleText;
+
+      document.getElementById('stat-bookings-count').textContent = filtered.length;
+
+      let totalItems = 0;
+      filtered.forEach(r => {
+        if (r.items && Array.isArray(r.items)) {
+          r.items.forEach(i => totalItems += (parseInt(i.quantity) || 1));
+        } else {
+          totalItems += 1;
+        }
+      });
+      document.getElementById('stat-items-count').textContent = totalItems;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card p-12 rounded-3xl text-center text-zinc-500">
+            <div class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-2xl text-emerald-400 mx-auto mb-3">
+              <i class="fa-solid fa-check"></i>
+            </div>
+            <h3 class="text-base font-bold text-white mb-1">No Rentals Found for this Filter</h3>
+            <p class="text-xs text-zinc-400">All rentals in this category are completely clear and returned!</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(rental => {
+        const customer = allCustomers[rental.customerId] || {
+          name: rental.customerName || 'Valued Customer',
+          phone: rental.customerPhone || 'N/A',
+          nic: rental.customerNic || 'N/A',
+          address: rental.customerAddress || 'N/A'
+        };
+
+        const cleanPhone = (customer.phone || '').replace(/[^0-9]/g, '');
+        const items = rental.items || [{ name: rental.productName || 'Bridal Jewellery Item', sku: rental.sku || 'JW-001', quantity: 1, rentPrice: rental.totalRentAmount || 0 }];
+
+        const due = new Date(rental.dueDate);
+        const current = new Date(todayStr);
+        const diffDays = Math.max(1, Math.floor((current - due) / (1000 * 60 * 60 * 24)));
+        const isOverdue = rental.dueDate < todayStr;
+        const lateFee = isOverdue ? diffDays * 1500 : 0;
+
+        return `
+          <div class="glass-card rounded-3xl p-4 sm:p-5 border border-zinc-800 transition-all hover:border-zinc-700">
+            <!-- Header Info -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-800/80">
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <span class="font-mono font-bold text-sm text-amber-400">${rental.rentalNumber || rental.id || rental._docId}</span>
+                <span class="text-xs text-zinc-500">•</span>
+                <span class="text-xs text-zinc-400 font-mono">📅 Rent: <strong>${rental.startDate || '-'}</strong> • ⏰ Due: <strong class="${isOverdue ? 'text-rose-400 font-black' : 'text-amber-300'}">${rental.dueDate}</strong></span>
+              </div>
+              <div class="flex items-center gap-2">
+                ${isOverdue ? `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    🔴 ${diffDays} Day(s) Overdue (Late Fee: Rs. ${lateFee.toLocaleString()})
+                  </span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    🟡 Due for Handback
+                  </span>
+                `}
+              </div>
+            </div>
+
+            <!-- Client & Contact Info -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3 border-b border-zinc-800/60 text-xs">
+              <div>
+                <span class="text-[10px] uppercase text-zinc-500 font-bold block mb-0.5">Customer Details</span>
+                <div class="font-bold text-white text-sm flex items-center gap-1.5">
+                  <i class="fa-solid fa-user text-[11px] text-amber-400"></i> ${customer.name}
+                </div>
+                <div class="text-zinc-400 font-mono mt-0.5">NIC: ${customer.nic || 'N/A'}</div>
+              </div>
+              <div class="flex items-center justify-start sm:justify-end gap-2">
+                <a href="tel:${cleanPhone}" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs border border-zinc-700 flex items-center gap-1.5 transition-colors">
+                  <i class="fa-solid fa-phone text-emerald-400"></i> Call (${customer.phone})
+                </a>
+                <a href="https://wa.me/${cleanPhone.startsWith('94') ? cleanPhone : '94' + cleanPhone.replace(/^0/, '')}" target="_blank" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm">
+                  <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+                </a>
+              </div>
+            </div>
+
+            <!-- Items List -->
+            <div class="pt-3">
+              <span class="text-[10px] uppercase text-zinc-500 font-bold block mb-2">Jewellery Items & Quantities</span>
+              <div class="space-y-2">
+                ${items.map(item => `
+                  <div class="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-xs">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center text-amber-300 font-bold text-xs shrink-0">
+                        <i class="fa-solid fa-gem"></i>
+                      </div>
+                      <div>
+                        <div class="font-bold text-white">${item.name}</div>
+                        <div class="text-[11px] text-zinc-500 font-mono">SKU: ${item.sku || 'N/A'} • Cat: ${item.category || 'Jewellery'}</div>
+                      </div>
+                    </div>
+                    <div class="text-right font-mono">
+                      <span class="inline-block px-2 py-0.5 rounded-lg bg-zinc-800 text-amber-300 font-bold text-xs border border-zinc-700">
+                        Qty: ${item.quantity || 1}
+                      </span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Footer Security & Deposit Summary -->
+            <div class="mt-3 pt-2.5 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 font-mono">
+              <div>
+                <span>Deposit Held: </span>
+                <strong class="text-white">Rs. ${(rental.totalDepositHeld || 0).toLocaleString()}</strong>
+                ${rental.collateralType === 'PHYSICAL_ID' ? '<span class="text-amber-400 font-bold ml-1">(Physical ID Held)</span>' : ''}
+              </div>
+              <div>
+                <span>Total Rent Paid: </span>
+                <strong class="text-emerald-400">Rs. ${(rental.totalRentAmount || rental.totalPaidAtCheckout || 0).toLocaleString()}</strong>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function initPinchZoomPrevention() {
+      // 1. Prevent iOS Safari Gesture Zooming
+      document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+
+      // 2. Prevent multi-touch pinch zoom
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // 3. Prevent double-tap to zoom on mobile
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          const target = e.target;
+          const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+          if (!isInput) {
+            e.preventDefault();
+          }
+        }
+        lastTouchEnd = now;
+      }, { passive: false });
+
+      // 4. Prevent Ctrl + Mousewheel Zoom
+      document.addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // 5. Prevent Keyboard Zoom Shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0' || e.keyCode === 187 || e.keyCode === 189 || e.keyCode === 48)) {
+          e.preventDefault();
+        }
+      });
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      initPinchZoomPrevention();
+      loadData();
+    });
+  </script>
+</body>
+</html>
