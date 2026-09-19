@@ -2,8 +2,12 @@ name: 24/7 Cloud Automated SMS & Owner Report Dispatcher
 
 on:
   schedule:
-    # Runs hourly 24/7 on Google Cloud to automatically process reminders at any time
-    - cron: '0 * * * *'
+    # 02:30 UTC = 08:00 AM Sri Lanka Time (Due Today & Morning Owner Executive Report)
+    - cron: '30 2 * * *'
+    # 05:00 UTC = 10:30 AM Sri Lanka Time (Overdue Warnings & Owner Overdue Report)
+    - cron: '0 5 * * *'
+    # 11:30 UTC = 05:00 PM Sri Lanka Time (Due Tomorrow 1-Day Warning & Owner Report)
+    - cron: '30 11 * * *'
   # Allows 1-click manual trigger from GitHub Actions tab anytime
   workflow_dispatch:
     inputs:
@@ -38,5 +42,5 @@ jobs:
           SMSLENZ_USER_ID: '2110'
           SMSLENZ_API_KEY: '44b6b7fc-998c-4d14-8a8c-2bd52fe251f2'
           SMSLENZ_SENDER_ID: 'J FASHION'
-          JOB_SLOT: ${{ github.event.inputs.job_slot || 'ALL_IN_ONE' }}
+          JOB_SLOT: ${{ github.event.inputs.job_slot || 'AUTO' }}
         run: node scripts/cloud-reminder-cron.js
