@@ -1,227 +1,185 @@
 /**
- * Jewel Fashion POS - 24/7 Cloud Automated SMS & Executive Owner Report Dispatcher
- * Scheduled 3 times daily via GitHub Actions:
- *  - 08:00 AM: Today's Due Returns (Customer Reminders + Owner Live Report Link)
- *  - 10:30 AM: Critical Overdue Returns (Customer Overdue SMS + Owner Live Report Link)
- *  - 05:00 PM: Tomorrow's Advance Returns (Customer Reminders + Owner Live Report Link)
+ * Jewel Fashion POS - 24/7 Cloud Automated SMS Reminder & Daily Report Engine
+ * Multi-Owner Daily Report Link Dispatcher
  */
 
 const https = require('https');
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'jewel-58bcc';
-let SMS_USER_ID = process.env.SMSLENZ_USER_ID || '2110';
-let SMS_API_KEY = process.env.SMSLENZ_API_KEY || '44b6b7fc-998c-4d14-8a8c-2bd52fe251f2';
-let SMS_SENDER_ID = process.env.SMSLENZ_SENDER_ID || 'J FASHION';
-const REPORT_BASE_URL = process.env.REPORT_BASE_URL || 'https://dilankavinda1234567-dev.github.io/jewel-fashion-pos/report.html';
+const PROJECT_ID = 'jewel-58bcc';
+const FIRESTORE_BASE_URL = 'firestore.googleapis.com';
 
-// Standard HTTP Request Promise
-function httpsRequest(options, postData = null) {
-  return new Promise((resolve, reject) => {
-    const defaultHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) JewelFashion/1.0',
-      'Accept': 'application/json, text/plain, */*'
-    };
-    const headers = Object.assign({}, defaultHeaders, options.headers || {});
-    const opts = Object.assign({ timeout: 10000 }, options, { headers });
-    const req = https.request(opts, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = data ? JSON.parse(data) : {};
-          resolve({ status: res.statusCode, headers: res.headers, body: json, raw: data });
-        } catch (e) {
-          resolve({ status: res.statusCode, headers: res.headers, raw: data });
-        }
-      });
-    });
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('HTTPS Request Timed Out'));
-    });
-    req.on('error', err => reject(err));
-    if (postData) req.write(postData);
-    req.end();
-  });
-}
+let SMS_USER_ID = process.env.SMS_USER_ID || '2110';
+let SMS_API_KEY = process.env.SMS_API_KEY || '44b6b7fc-998c-4d14-8a8c-2bd52fe251f2';
+let SMS_SENDER_ID = process.env.SMS_SENDER_ID || 'J FASHION';
 
-// Convert Firestore REST document format to plain JS object
-function parseFirestoreFields(fields) {
-  if (!fields) return {};
-  const result = {};
-  for (const [key, val] of Object.entries(fields)) {
-    if (val.stringValue !== undefined) result[key] = val.stringValue;
-    else if (val.integerValue !== undefined) result[key] = parseInt(val.integerValue, 10);
-    else if (val.doubleValue !== undefined) result[key] = parseFloat(val.doubleValue);
-    else if (val.booleanValue !== undefined) result[key] = val.booleanValue;
-    else if (val.arrayValue !== undefined) {
-      result[key] = (val.arrayValue.values || []).map(v => {
-        if (v.mapValue) return parseFirestoreFields(v.mapValue.fields);
-        if (v.stringValue !== undefined) return v.stringValue;
-        if (v.integerValue !== undefined) return parseInt(v.integerValue, 10);
-        if (v.doubleValue !== undefined) return parseFloat(v.doubleValue);
+function parseFirestoreDoc(doc) {
+  if (!doc || !doc.fields) return {};
+  const result = { _docId: doc.name.split('/').pop() };
+  for (const [key, valObj] of Object.entries(doc.fields)) {
+    if ('stringValue' in valObj) result[key] = valObj.stringValue;
+    else if ('integerValue' in valObj) result[key] = parseInt(valObj.integerValue, 10);
+    else if ('doubleValue' in valObj) result[key] = parseFloat(valObj.doubleValue);
+    else if ('booleanValue' in valObj) result[key] = valObj.booleanValue;
+    else if ('timestampValue' in valObj) result[key] = valObj.timestampValue;
+    else if ('nullValue' in valObj) result[key] = null;
+    else if ('arrayValue' in valObj) {
+      result[key] = (valObj.arrayValue.values || []).map(v => {
+        if ('stringValue' in v) return v.stringValue;
+        if ('integerValue' in v) return parseInt(v.integerValue, 10);
+        if ('mapValue' in v) return parseFirestoreDoc({ fields: v.mapValue.fields });
         return v;
       });
-    } else if (val.mapValue !== undefined) {
-      result[key] = parseFirestoreFields(val.mapValue.fields);
+    } else if ('mapValue' in valObj) {
+      result[key] = parseFirestoreDoc({ fields: valObj.mapValue.fields });
     }
   }
   return result;
 }
 
-// Dispatch SMS to SMSlenz.lk
-async function sendSMS({ phone, message }) {
-  let cleanPhone = (phone || '').trim().replace(/[^0-9]/g, '');
-  if (cleanPhone.startsWith('07')) {
-    cleanPhone = '94' + cleanPhone.substring(1);
-  } else if (cleanPhone.startsWith('7') && cleanPhone.length === 9) {
-    cleanPhone = '94' + cleanPhone;
-  } else if (cleanPhone.length === 10 && cleanPhone.startsWith('0')) {
-    cleanPhone = '94' + cleanPhone.substring(1);
-  }
-
-  const path = `/api/send-sms?user_id=${encodeURIComponent(SMS_USER_ID)}&api_key=${encodeURIComponent(SMS_API_KEY)}&sender_id=${encodeURIComponent(SMS_SENDER_ID)}&contact=${encodeURIComponent(cleanPhone)}&message=${encodeURIComponent(message)}`;
-
-  try {
-    const res = await httpsRequest({
-      hostname: 'smslenz.lk',
-      path: path,
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-    return res.body;
-  } catch (err) {
-    console.error(`Error dispatching SMS to ${cleanPhone}:`, err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-// Fetch all documents in a Firestore collection
-async function fetchFirestoreCollection(collectionName) {
-  try {
-    const res = await httpsRequest({
-      hostname: 'firestore.googleapis.com',
-      path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collectionName}?pageSize=500`,
-      method: 'GET'
-    });
-
-    if (res.body && res.body.documents) {
-      return res.body.documents.map(doc => {
-        const id = doc.name.split('/').pop();
-        const data = parseFirestoreFields(doc.fields);
-        data._docId = id;
-        return data;
-      });
-    }
-    return [];
-  } catch (err) {
-    console.error(`Error fetching collection [${collectionName}]:`, err.message);
-    return [];
-  }
-}
-
-// Update specific fields on a Firestore document
-async function updateFirestoreDocument(collectionName, docId, updates) {
-  try {
-    const fields = {};
-    const maskParams = [];
-
-    for (const [k, v] of Object.entries(updates)) {
-      fields[k] = { stringValue: String(v) };
-      maskParams.push(`updateMask.fieldPaths=${encodeURIComponent(k)}`);
-    }
-
-    const path = `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collectionName}/${docId}?${maskParams.join('&')}`;
-    const payload = JSON.stringify({ fields });
-
-    await httpsRequest({
-      hostname: 'firestore.googleapis.com',
-      path: path,
-      method: 'PATCH',
+function firestoreRequest({ method = 'GET', path, body }) {
+  return new Promise((resolve, reject) => {
+    const dataString = body ? JSON.stringify(body) : '';
+    const options = {
+      hostname: FIRESTORE_BASE_URL,
+      port: 443,
+      path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents${path}`,
+      method: method,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload)
+        'Content-Length': Buffer.byteLength(dataString)
       }
-    }, payload);
-    return true;
+    };
+
+    const req = https.request(options, (res) => {
+      let resBody = '';
+      res.on('data', chunk => resBody += chunk);
+      res.on('end', () => {
+        try {
+          resolve(resBody ? JSON.parse(resBody) : {});
+        } catch (e) {
+          resolve({ raw: resBody });
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    if (dataString) req.write(dataString);
+    req.end();
+  });
+}
+
+async function fetchFirestoreCollection(colName) {
+  try {
+    const res = await firestoreRequest({ method: 'GET', path: `/${colName}` });
+    if (!res || !res.documents) return [];
+    return res.documents.map(parseFirestoreDoc);
   } catch (err) {
-    console.error(`Error updating document ${docId}:`, err.message);
-    return false;
+    console.error(`Error fetching Firestore collection [${colName}]:`, err.message);
+    return [];
   }
 }
 
-// Append record to Firestore sms_logs
-async function logToFirestoreSmsLogs(logItem) {
+async function updateFirestoreDocument(colName, docId, fields) {
   try {
+    const firestoreFields = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (typeof v === 'string') firestoreFields[k] = { stringValue: v };
+      else if (typeof v === 'number') firestoreFields[k] = Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+      else if (typeof v === 'boolean') firestoreFields[k] = { booleanValue: v };
+    }
+    const updateMask = Object.keys(fields).map(k => `updateMask.fieldPaths=${k}`).join('&');
+    return await firestoreRequest({
+      method: 'PATCH',
+      path: `/${colName}/${docId}?${updateMask}`,
+      body: { fields: firestoreFields }
+    });
+  } catch (err) {
+    console.error(`Error updating Firestore doc [${colName}/${docId}]:`, err.message);
+  }
+}
+
+async function logToFirestoreSmsLogs(logData) {
+  try {
+    const docId = logData.id || `SMS-${Date.now().toString().slice(-4)}`;
     const fields = {
-      id: { stringValue: logItem.id },
-      recipientName: { stringValue: logItem.recipientName || 'Customer' },
-      recipientPhone: { stringValue: logItem.recipientPhone || '' },
-      recipientRole: { stringValue: logItem.recipientRole || 'CUSTOMER' },
-      type: { stringValue: logItem.type || 'REMINDER' },
-      title: { stringValue: logItem.title || 'Cloud Reminder' },
-      message: { stringValue: logItem.message || '' },
+      id: { stringValue: docId },
+      recipientName: { stringValue: logData.recipientName || 'Valued Client' },
+      recipientPhone: { stringValue: logData.recipientPhone || '' },
+      recipientRole: { stringValue: logData.recipientRole || 'CUSTOMER' },
+      type: { stringValue: logData.type || 'REMINDER' },
+      title: { stringValue: logData.title || 'SMS Notification' },
+      message: { stringValue: logData.message || '' },
       timestamp: { stringValue: new Date().toISOString() },
       status: { stringValue: 'DELIVERED' },
-      source: { stringValue: 'GITHUB_ACTIONS_CLOUD' }
+      source: { stringValue: 'GITHUB_ACTIONS_CRON' }
     };
 
-    const docId = 'SMS-' + Date.now().toString().slice(-4) + '-' + Math.floor(Math.random() * 100);
-    const path = `/v1/projects/${PROJECT_ID}/databases/(default)/documents/sms_logs?documentId=${docId}`;
-    const payload = JSON.stringify({ fields });
+    return await firestoreRequest({
+      method: 'PATCH',
+      path: `/sms_logs/${docId}`,
+      body: { fields }
+    });
+  } catch (err) {
+    console.error("Error logging to Firestore sms_logs:", err.message);
+  }
+}
 
-    await httpsRequest({
-      hostname: 'firestore.googleapis.com',
-      path: path,
+function sendSMS({ phone, message }) {
+  return new Promise((resolve, reject) => {
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '94' + cleanPhone.slice(1);
+    if (!cleanPhone.startsWith('94')) cleanPhone = '94' + cleanPhone;
+
+    const payload = JSON.stringify({
+      user_id: SMS_USER_ID,
+      api_key: SMS_API_KEY,
+      sender_id: SMS_SENDER_ID,
+      to: cleanPhone,
+      message: message
+    });
+
+    const options = {
+      hostname: 'smslenz.lk',
+      port: 443,
+      path: '/api/v1/sms/send',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload)
       }
-    }, payload);
-  } catch (e) {
-    console.warn("Could not log to Firestore sms_logs", e.message);
-  }
+    };
+
+    const req = https.request(options, (res) => {
+      let resBody = '';
+      res.on('data', chunk => resBody += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(resBody);
+          resolve(parsed);
+        } catch (e) {
+          resolve({ raw: resBody });
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.write(payload);
+    req.end();
+  });
 }
 
-// MAIN RUNNER
 async function runCloudReminderCron() {
-  // Determine current Sri Lanka Time (UTC + 5:30)
-  const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const slNow = new Date(utc + (5.5 * 3600000));
-  const todayStr = slNow.toISOString().split('T')[0];
+  const jobSlot = process.env.JOB_SLOT || 'ALL_IN_ONE';
 
-  const slTomorrow = new Date(slNow.getTime() + (24 * 3600000));
-  const tomorrowStr = slTomorrow.toISOString().split('T')[0];
+  // Current Sri Lanka Time (UTC + 5:30)
+  const nowUtc = new Date();
+  const slOffsetMs = (5 * 60 + 30) * 60 * 1000;
+  const slTime = new Date(nowUtc.getTime() + slOffsetMs);
 
-  const slHour = slNow.getHours();
-  const slMinute = slNow.getMinutes();
-  const slTimeFormatted = `${String(slHour).padStart(2, '0')}:${String(slMinute).padStart(2, '0')}`;
-
-  // Check custom override from environment or auto-route based on exact Sri Lanka Time
-  let jobSlot = process.env.JOB_SLOT || 'AUTO';
-  if (jobSlot === 'AUTO') {
-    // Strict Night / Quiet Hours Protection (8:00 PM - 7:00 AM Sri Lanka Time)
-    if (slHour < 7 || slHour >= 20) {
-      console.log(`🌙 [Quiet Hours Active] Current Sri Lanka Time: ${slTimeFormatted} (${todayStr}). Night protection enabled. Automated SMS reminders are strictly disabled between 8:00 PM and 7:00 AM. Exiting.`);
-      return;
-    }
-
-    // 08:00 AM Slot (07:00 - 09:59): Due Today (Customer SMS + Owner Morning Report)
-    // 10:30 AM Slot (10:00 - 13:59): Critical Overdue (Customer SMS + Owner Overdue Report)
-    // 05:00 PM Slot (14:00 - 19:59): Due Tomorrow (Customer Advance 1-Day SMS + Owner Tomorrow Report)
-    if (slHour >= 7 && slHour < 10) {
-      jobSlot = 'TODAY_8AM';
-    } else if (slHour >= 10 && slHour < 14) {
-      jobSlot = 'OVERDUE_1030AM';
-    } else if (slHour >= 14 && slHour < 20) {
-      jobSlot = 'TOMORROW_5PM';
-    } else {
-      console.log(`ℹ️ [Outside Scheduled Slot] Current Sri Lanka Time: ${slTimeFormatted}. No active reminder window. Exiting safely.`);
-      return;
-    }
-  }
+  const todayStr = slTime.toISOString().split('T')[0];
+  const tomorrowDate = new Date(slTime.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+  const slTimeFormatted = slTime.toISOString().replace('T', ' ').slice(0, 19);
 
   console.log("==================================================================");
   console.log("👑 JEWEL FASHION - 24/7 CLOUD AUTOMATED SMS & REPORT DISPATCHER");
@@ -234,8 +192,9 @@ async function runCloudReminderCron() {
   // 1. Fetch Store Settings
   const settingsDocs = await fetchFirestoreCollection('settings');
   let settings = {
-    phone: '+94 11 234 5678 / +94 77 123 4567',
-    ownerPhone: '0740491342',
+    address: '130/10 Golden Plaza Market, Main Street, Colombo 11',
+    phone: '0724229121 / 0750101589',
+    ownerPhone: '0724229121, 0750101589, 0740491342',
     lateFeePerDay: 1500,
     autoSmsReminders: true,
     autoSmsToOwner: true,
@@ -246,6 +205,16 @@ async function runCloudReminderCron() {
     settings = Object.assign(settings, generalDoc);
   }
 
+  // Helper: parse all owner numbers
+  function getOwnerPhoneList(st) {
+    const raw = (st && st.ownerPhone) ? st.ownerPhone : '0724229121, 0750101589, 0740491342';
+    const numbers = String(raw)
+      .split(/[,/|;\s]+/)
+      .map(n => n.trim().replace(/[^0-9+]/g, ''))
+      .filter(n => n.length >= 9);
+    return numbers.length > 0 ? Array.from(new Set(numbers)) : ['0724229121', '0750101589', '0740491342'];
+  }
+
   // Dynamic Live Report Base URL
   const activeReportBaseUrl = (settings.reportBaseUrl || process.env.REPORT_BASE_URL || 'https://dilankavinda1234567-dev.github.io/jewel-fashion-pos/report.html').trim();
 
@@ -254,58 +223,36 @@ async function runCloudReminderCron() {
   if (settings.smsApiKey) SMS_API_KEY = settings.smsApiKey;
   if (settings.smsSenderId) SMS_SENDER_ID = settings.smsSenderId;
 
-  // Sanitize invalid or placeholder credentials
   if (!SMS_API_KEY || SMS_API_KEY === 'JF_LIVE_API_KEY_8899' || SMS_API_KEY.startsWith('YOUR_')) {
     SMS_API_KEY = '44b6b7fc-998c-4d14-8a8c-2bd52fe251f2';
-  }
-  if (!SMS_USER_ID || SMS_USER_ID === 'USER_ID') {
     SMS_USER_ID = '2110';
-  }
-  if (!SMS_SENDER_ID || SMS_SENDER_ID === 'SMSlenzDEMO' || SMS_SENDER_ID === 'JEWEL-FASH' || SMS_SENDER_ID === 'ACCEPT WEB') {
     SMS_SENDER_ID = 'J FASHION';
   }
 
   if (settings.autoSmsReminders === false) {
-    console.log("ℹ️ Auto SMS Reminders disabled in store settings. Exiting.");
+    console.log("⏸️ Automated SMS Reminders is toggled OFF in Admin Settings. Exiting job cleanly.");
     return;
   }
 
-  // 2. Fetch Customers & Rentals
-  const customers = await fetchFirestoreCollection('customers');
+  // 2. Fetch Active Rentals & Customers
+  const [rentals, customers] = await Promise.all([
+    fetchFirestoreCollection('rentals'),
+    fetchFirestoreCollection('customers')
+  ]);
+
   const customerMap = {};
   customers.forEach(c => {
-    customerMap[c.id || c._docId] = c;
+    if (c.id) customerMap[c.id] = c;
+    if (c.phone) customerMap[c.phone] = c;
   });
 
-  const rentals = await fetchFirestoreCollection('rentals');
-  if (rentals.length === 0) {
-    console.log("ℹ️ No rentals found in database.");
-  }
-
-  const activeRentals = rentals.filter(r => r.status !== 'RETURNED');
-  console.log(`📦 Found ${activeRentals.length} active rental(s) out of ${rentals.length} total records.`);
-
-  // Optional: Check Low Stock Products in Cloud Scan
-  const lowStockThreshold = (settings.lowStockThreshold !== undefined && settings.lowStockThreshold !== null) ? parseInt(settings.lowStockThreshold, 10) : 3;
-  if (settings.autoSmsLowStock !== false) {
-    try {
-      const products = await fetchFirestoreCollection('products');
-      const lowStockItems = products.filter(p => 
-        (p.isBuyAvailable && typeof p.stockBuy === 'number' && p.stockBuy <= lowStockThreshold) ||
-        (p.isRentalAvailable && typeof p.stockRent === 'number' && p.stockRent <= lowStockThreshold)
-      );
-      if (lowStockItems.length > 0) {
-        console.log(`⚠️ [Stock Audit] ${lowStockItems.length} product(s) currently at low stock level (<= ${lowStockThreshold} units).`);
-      }
-    } catch (e) {
-      console.warn("Could not check product low stock:", e.message);
-    }
-  }
+  const activeRentals = rentals.filter(r => r.status !== 'RETURNED' && r.status !== 'SETTLED');
+  console.log(`📊 Found ${activeRentals.length} active rental records in vault.`);
 
   let customerSmsCount = 0;
 
   // =========================================================================
-  // 1. JOB SLOT: 8:00 AM (Due Today Reminders + Owner Live Report Link)
+  // 1. JOB SLOT: 8:00 AM (Due Today Urgent Notice + Owner Today Report Link)
   // =========================================================================
   if (jobSlot === 'TODAY_8AM' || jobSlot === 'ALL_IN_ONE') {
     console.log("\n🌅 [8:00 AM JOB] Scanning for Rentals Due TODAY...");
@@ -325,9 +272,9 @@ async function runCloudReminderCron() {
         ? rental.items.map(i => `${i.name} (Qty: ${i.quantity || 1})`).join(', ')
         : (rental.productName || 'Bridal Jewellery Set');
 
-      const custMsg = `JEWEL FASHION URGENT NOTICE: Dear ${customer.name}, your jewellery rental (${rental.rentalNumber || rental.id}) is due for return TODAY (${rental.dueDate}). Items: ${itemNames}. Please visit our boutique before 6:30 PM today for return inspection & deposit refund. Hotline: ${settings.phone}`;
+      const custMsg = `JEWEL FASHION URGENT NOTICE: Dear ${customer.name}, your jewellery rental (${rental.rentalNumber || rental.id}) is due for return TODAY (${rental.dueDate}). Items: ${itemNames}. Please visit our salon before 6:30 PM today for return inspection and deposit handback. Hotline: ${settings.phone}`;
 
-      console.log(`   📱 Sending Due Today SMS to ${customer.name} (${customer.phone})...`);
+      console.log(`   📱 Sending Today Due Notice to ${customer.name} (${customer.phone})...`);
       await sendSMS({ phone: customer.phone, message: custMsg });
 
       await updateFirestoreDocument('rentals', rental._docId, {
@@ -349,7 +296,8 @@ async function runCloudReminderCron() {
     }
 
     // Send Live Report Link to Store Owner (08:00 AM Morning Executive Summary)
-    if (settings.autoSmsToOwner && settings.ownerPhone) {
+    const ownerPhones8AM = getOwnerPhoneList(settings);
+    if (settings.autoSmsToOwner && ownerPhones8AM.length > 0) {
       const reportLink = `${activeReportBaseUrl}?type=today`;
       let totalItemsToday = 0;
       dueTodayRentals.forEach(r => {
@@ -366,18 +314,20 @@ async function runCloudReminderCron() {
         ownerMsg = `👑 JEWEL FASHION OWNER REPORT (08:00 AM): 0 rentals due today (${todayStr}). Active: ${activeRentals.length}, Overdue: ${overdueRentalsCount}. All clear. View live overview: ${reportLink}`;
       }
 
-      console.log(`   👑 Dispatching Today's Executive Report Link to Store Owner (${settings.ownerPhone})...`);
-      await sendSMS({ phone: settings.ownerPhone, message: ownerMsg });
+      for (const phone of ownerPhones8AM) {
+        console.log(`   👑 Dispatching Today's Executive Report Link to Store Owner (${phone})...`);
+        await sendSMS({ phone, message: ownerMsg });
 
-      await logToFirestoreSmsLogs({
-        id: 'SMS-' + Date.now().toString().slice(-4),
-        recipientName: 'Store Owner',
-        recipientPhone: settings.ownerPhone,
-        recipientRole: 'OWNER',
-        type: 'OWNER_REPORT_TODAY',
-        title: `👑 Today's Return Report Link (${dueTodayRentals.length} Due Today)`,
-        message: ownerMsg
-      });
+        await logToFirestoreSmsLogs({
+          id: 'SMS-' + Date.now().toString().slice(-4),
+          recipientName: 'Store Owner',
+          recipientPhone: phone,
+          recipientRole: 'OWNER',
+          type: 'OWNER_REPORT_TODAY',
+          title: `👑 Today's Return Report Link (${dueTodayRentals.length} Due Today)`,
+          message: ownerMsg
+        });
+      }
     }
   }
 
@@ -427,7 +377,8 @@ async function runCloudReminderCron() {
     }
 
     // Send Overdue Report Link to Store Owner (10:30 AM Daily Overdue Status)
-    if (settings.autoSmsToOwner && settings.ownerPhone) {
+    const ownerPhones1030AM = getOwnerPhoneList(settings);
+    if (settings.autoSmsToOwner && ownerPhones1030AM.length > 0) {
       const reportLink = `${activeReportBaseUrl}?type=overdue`;
       let totalOverdueItems = 0;
       overdueRentals.forEach(r => {
@@ -442,18 +393,20 @@ async function runCloudReminderCron() {
         ownerMsg = `👑 JEWEL FASHION OWNER REPORT (10:30 AM): 0 OVERDUE rentals pending (${todayStr}). All active rentals are in good standing. View live list: ${reportLink}`;
       }
 
-      console.log(`   👑 Dispatching Overdue Executive Report Link to Store Owner (${settings.ownerPhone})...`);
-      await sendSMS({ phone: settings.ownerPhone, message: ownerMsg });
+      for (const phone of ownerPhones1030AM) {
+        console.log(`   👑 Dispatching Overdue Executive Report Link to Store Owner (${phone})...`);
+        await sendSMS({ phone, message: ownerMsg });
 
-      await logToFirestoreSmsLogs({
-        id: 'SMS-' + Date.now().toString().slice(-4),
-        recipientName: 'Store Owner',
-        recipientPhone: settings.ownerPhone,
-        recipientRole: 'OWNER',
-        type: 'OWNER_REPORT_OVERDUE',
-        title: `⚠️ Overdue Report Link (${overdueRentals.length} Overdue)`,
-        message: ownerMsg
-      });
+        await logToFirestoreSmsLogs({
+          id: 'SMS-' + Date.now().toString().slice(-4),
+          recipientName: 'Store Owner',
+          recipientPhone: phone,
+          recipientRole: 'OWNER',
+          type: 'OWNER_REPORT_OVERDUE',
+          title: `⚠️ Overdue Report Link (${overdueRentals.length} Overdue)`,
+          message: ownerMsg
+        });
+      }
     }
   }
 
@@ -502,7 +455,8 @@ async function runCloudReminderCron() {
     }
 
     // Send Tomorrow's Return Report Link to Store Owner (05:00 PM Daily Forecast)
-    if (settings.autoSmsToOwner && settings.ownerPhone) {
+    const ownerPhones5PM = getOwnerPhoneList(settings);
+    if (settings.autoSmsToOwner && ownerPhones5PM.length > 0) {
       const reportLink = `${activeReportBaseUrl}?type=tomorrow`;
       let totalItemsTomorrow = 0;
       dueTomorrowRentals.forEach(r => {
@@ -517,18 +471,20 @@ async function runCloudReminderCron() {
         ownerMsg = `👑 JEWEL FASHION OWNER REPORT (05:00 PM): 0 rental returns scheduled for tomorrow (${tomorrowStr}). Active bookings: ${activeRentals.length}. View live list: ${reportLink}`;
       }
 
-      console.log(`   👑 Dispatching Tomorrow's Return Report Link to Store Owner (${settings.ownerPhone})...`);
-      await sendSMS({ phone: settings.ownerPhone, message: ownerMsg });
+      for (const phone of ownerPhones5PM) {
+        console.log(`   👑 Dispatching Tomorrow's Return Report Link to Store Owner (${phone})...`);
+        await sendSMS({ phone, message: ownerMsg });
 
-      await logToFirestoreSmsLogs({
-        id: 'SMS-' + Date.now().toString().slice(-4),
-        recipientName: 'Store Owner',
-        recipientPhone: settings.ownerPhone,
-        recipientRole: 'OWNER',
-        type: 'OWNER_REPORT_TOMORROW',
-        title: `👑 Tomorrow's Return Report Link (${dueTomorrowRentals.length} Bookings)`,
-        message: ownerMsg
-      });
+        await logToFirestoreSmsLogs({
+          id: 'SMS-' + Date.now().toString().slice(-4),
+          recipientName: 'Store Owner',
+          recipientPhone: phone,
+          recipientRole: 'OWNER',
+          type: 'OWNER_REPORT_TOMORROW',
+          title: `👑 Tomorrow's Return Report Link (${dueTomorrowRentals.length} Bookings)`,
+          message: ownerMsg
+        });
+      }
     }
   }
 
