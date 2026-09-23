@@ -16,9 +16,9 @@ const INITIAL_SMS_LOGS = [];
 const INITIAL_SETTINGS = {
   shopName: "JEWEL FASHION",
   tagline: "Fine Gold, Diamond & Luxury Bridal Rental House",
-  address: "No. 142, Galle Road, Colombo 03, Sri Lanka",
-  phone: "+94 11 234 5678 / +94 77 123 4567",
-  ownerPhone: "0740491342",
+  address: "130/10 Golden Plaza Market, Main Street, Colombo 11",
+  phone: "0724229121 / 0750101589",
+  ownerPhone: "0724229121, 0750101589, 0740491342",
   ownerEmail: "owner@jewelfashion.lk",
   currency: "LKR",
   currencySymbol: "Rs.",
